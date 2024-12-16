@@ -102,13 +102,17 @@ class Agents(scrapi_base.ScrapiBase):
             agent_id=agent_id,gcs_bucket_uri=gcs_bucket_uri, data_format="JSON",
             environment_display_name=environment_display_name)
 
-
         self.await_lro(lro)
         logging.info("Export Complete.")
         logging.debug(f"EXPORT: {time.time() - export_start}")
 
     def download_and_extract(self, agent_local_path: str, gcs_bucket_uri: str):
         """Handle download from GCS and extracting ZIP file."""
+        agent_file = self.download_agent(agent_local_path, gcs_bucket_uri)
+        self.extract_agent(agent_file, agent_local_path)
+
+    def download_agent(self, agent_local_path: str, gcs_bucket_uri: str):
+        """Handle download from GCS."""
         if not os.path.exists(agent_local_path):
             os.makedirs(agent_local_path)
 
@@ -118,9 +122,13 @@ class Agents(scrapi_base.ScrapiBase):
             gcs_path=gcs_bucket_uri, local_path=agent_local_path)
         logging.info("Download complete.")
         logging.debug(f"DOWNLOAD: {time.time() - download_start}")
+        return agent_file
 
+    def extract_agent(self, agent_file: str, agent_local_path: str):
+        """Handle extracting ZIP file."""
+        if not os.path.exists(agent_local_path):
+            os.makedirs(agent_local_path)
         self.gcs.unzip(agent_file, agent_local_path)
-
 
     def process_agent(self, agent_id: str, gcs_bucket_uri: str,
                       environment_display_name: str = None):
@@ -129,7 +137,10 @@ class Agents(scrapi_base.ScrapiBase):
         self.prep_local_dir(agent_local_path)
         self.export_agent(agent_id, gcs_bucket_uri, environment_display_name)
         self.download_and_extract(agent_local_path, gcs_bucket_uri)
+        return self.process_data(agent_id, agent_local_path)
 
+    def process_data(self, agent_id: str, agent_local_path: str):
+        """Process the extracted agent data"""
         logging.info("Processing Agent...")
         data = types.AgentData()
         data.graph = graph.Graph()
@@ -142,5 +153,13 @@ class Agents(scrapi_base.ScrapiBase):
         data = self.webhooks.process_webhooks_directory(agent_local_path, data)
         data = self.tcs.process_test_cases_directory(agent_local_path, data)
         logging.info("Processing Complete.")
-
         return data
+
+    def process_agent_offline(self, agent_id: str, agent_file: str,
+                              agent_local_path: str = "/tmp/agent"):
+        """Process the Agent ZIP provided at agent_file"""
+        if not os.path.exists(agent_local_path):
+            os.makedirs(agent_local_path)
+        self.prep_local_dir(agent_local_path)
+        self.extract_agent(agent_file, agent_local_path)
+        return self.process_data(agent_id, agent_local_path)

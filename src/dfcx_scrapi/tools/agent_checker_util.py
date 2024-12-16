@@ -16,6 +16,7 @@
 
 import logging
 import time
+import os.path
 from typing import Dict, List
 
 import pandas as pd
@@ -35,12 +36,13 @@ class AgentCheckerUtil(scrapi_base.ScrapiBase):
 
     def __init__(
         self,
-        agent_id: str,
-        gcs_bucket_uri: str,
+        agent_id: str = None,
+        gcs_bucket_uri: str = None,
         creds_path: str = None,
         creds_dict: Dict = None,
         creds=None,
         scope=False,
+        agent_local_zip_path: str = None
     ):
         super().__init__(
             creds_path=creds_path,
@@ -62,7 +64,12 @@ class AgentCheckerUtil(scrapi_base.ScrapiBase):
         processing_time = time.time()
         logging.debug(f"STARTUP: {processing_time - startup_time}")
 
-        self.data = self.extract.process_agent(agent_id, gcs_bucket_uri)
+        if agent_local_zip_path is None:
+            self.data = self.extract.process_agent(agent_id, gcs_bucket_uri)
+        else:
+            self.data = self.extract.process_agent_offline(agent_id,
+                                                           agent_local_zip_path)
+
         logging.debug(f"TOTAL PROCESSING: {time.time() - processing_time}")
 
         self.active_intents_df = self.active_intents_to_dataframe()
